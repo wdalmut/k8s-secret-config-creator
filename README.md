@@ -5,7 +5,7 @@ configuration file
 
 
 ```
-node index.js update -s <development-cloudformation-stack-name>
+./config-creator update -s <development-cloudformation-stack-name>
 ```
 
 Just check the `aws.yaml` file
@@ -15,9 +15,9 @@ Just check the `aws.yaml` file
 Run it with help
 
 ```
-node index.js update -s test --help
+./config-creator update -s test --help
 
-Usage: index-update [options]
+Usage: config-creator [options]
 
 Options:
   -c, --credentials <filepath>   AWS Credentials (default: "/home/ash/.aws/credentials")
@@ -27,6 +27,5 @@ Options:
   -S, --silent                   expose created configuration in output (default: false)
   -s, --stack-name <stack-name>  Cloud Formation Stack Name
   -h, --help                     output usage information
-
 ```
 
