@@ -1,0 +1,60 @@
+#!/usr/bin/env node
+
+const program = require('commander');
+const fs = require('fs')
+const ini = require('ini')
+const YAML = require('yaml')
+const {
+  pick, compose, set, lensProp, mergeDeepLeft, prop, head,
+  map, converge, pair, fromPairs, replace, over, ifElse,
+  identity, tap,
+} = require('ramda')
+const AWS = require('aws-sdk')
+
+program
+  .option('-c, --credentials <filepath>', 'AWS Credentials', `${process.env.HOME}/.aws/credentials`)
+  .option('-p, --profile <profile>', 'AWS Profile', "default")
+  .option('-r, --region <region>', 'AWS Region', 'eu-west-1')
+  .option('-o, --output <path>', 'Save aws.yaml file at give path', 'aws.yaml')
+  .option('-S, --silent', 'expose created configuration in output', false)
+  .requiredOption('-s, --stack-name <stack-name>', 'Cloud Formation Stack Name')
+
+program.parse(process.argv)
+
+AWS.config.credentials = new AWS.SharedIniFileCredentials({profile: program.profile});
+const cloudformation = new AWS.CloudFormation({
+  region: program.region,
+});
+
+const credentials = ini.parse(fs.readFileSync(program.credentials, 'utf-8'))
+
+let profile = prop(program.profile, credentials)
+
+if (!profile) {
+  console.log(`Missing profile ${program.profile}`)
+  process.exit(1)
+}
+
+Promise.resolve({
+    apiVersion: "v1",
+    kind: "Secret",
+    metadata: {
+      name: "aws-credentials",
+    },
+    type: "Opaque",
+    stringData: {}
+  })
+  .then(set(lensProp('stringData'), pick(['aws_access_key_id','aws_secret_access_key','aws_session_token'], profile)))
+  .then(secret => {
+    return cloudformation
+      .describeStacks({ StackName: program.stackName })
+      .promise()
+      .then(compose(prop('Outputs'), head, prop('Stacks')))
+      .then(map(converge(pair, [compose(replace(/\-/g, "_"), replace(`${program.stackName}-`, ''), prop('ExportName')), prop('OutputValue')])))
+      .then(fromPairs)
+      .then(data => over(lensProp('stringData'), mergeDeepLeft(data), secret))
+  })
+  .then(YAML.stringify)
+  .then(ifElse(() => program.silent, identity, tap(console.log)))
+  .then(secret => fs.writeFileSync(program.output, secret))
+
